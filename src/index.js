@@ -11,12 +11,14 @@ io.on('connection', onConnectionHandler);
 global.users = {
   teacher: {
     name: 'teacher',
+    online: false,
     pass: 'wfksj374FeNslw42',
     token: 'J2x2O2dRsO8VR17e6tIpggCqS83hsqrDEz9bCxjP214E1A2naR0EE2kjDSHM4pKtyo78PrpvkNKIqODHp1NN8X1fiuLnr1CNIWxrpTCF3eEJxxoVIv0m7BSdYvuvaXvw',
     sockets: []
   },
   student: {
     name: 'student',
+    online: false,
     pass: 'Eo97Vq4YXBFf14jH',
     token: 'flUfMMFbJteDPhQsQIaiQ92uteAsb3EGHA1Gkx7Bp9vKv8o2B6PBQ6I0GdtpP2IYjLQ8swXgqx2SJzLIux2wukDdfulgEqcbWgm91wGERwrcI4Mulhi5nZ6HNIq84Dtz',
     sockets: []
@@ -27,6 +29,11 @@ global.clients = {};
 const E_AUTHORISE = 'authorise';
 const E_AUTHENTICATE = 'authenticate';
 const E_CHAT = 'chat';
+const E_SHAPE = 'shape';
+const E_DATA = 'data';
+const E_JOINED = 'joined';
+const E_STATUS = 'check-status';
+const E_COMMAND = 'command';
 
 const _CLASSROOM = 'classroom';
 
@@ -44,10 +51,12 @@ function onConnectionHandler(socket) {
     } else {
       log(`[${name}]: authorisation successfully`);
       user.sockets.push(socket.id);
+      user.online = true;
       socket.emit(E_AUTHORISE, { status: 'ok', data: { token: user.token, name } });
       socket.join(_CLASSROOM, () => {
         log(`[${name}]: joined to [${_CLASSROOM}]`);
-        io.to(_CLASSROOM).emit({ status: 'ok', room: _CLASSROOM });
+        io.to(_CLASSROOM).emit(E_JOINED, { status: 'ok', room: _CLASSROOM });
+        io.to(_CLASSROOM).emit(E_STATUS, { online: user.online, name: user.name });
       });
     }
   });
@@ -61,30 +70,47 @@ function onConnectionHandler(socket) {
     } else {
       log(`[${name}]: authentication successfully`);
       user.sockets.push(socket.id);
+      user.online = true;
       socket.emit(E_AUTHENTICATE, { status: 'ok' });
       socket.join(_CLASSROOM, () => {
         log(`[${name}]: joined to [${_CLASSROOM}]`);
-        io.to(_CLASSROOM).emit('joined', { status: 'ok', room: _CLASSROOM, name });
+        io.to(_CLASSROOM).emit(E_JOINED, { status: 'ok', room: _CLASSROOM, name });
+        io.to(_CLASSROOM).emit(E_STATUS, { online: user.online, name: user.name });
       });
     }
   });
 
+  socket.on(E_COMMAND, ({ command, payload }) => {
+    log(`command [${command}] sent`);
+    io.to(_CLASSROOM).emit(E_COMMAND, { command, payload });
+  });
   socket.on(E_CHAT, ({ name, message }) => {
     log(`[${name}]: sent message`);
     io.to(_CLASSROOM).emit(E_CHAT, { name, message });
+  });
+  socket.on(E_STATUS, ({ name }) => {
+    const user = global.users[name];
+    log(`[${name}]: requested status`);
+    socket.emit(E_STATUS, { online: user.online, name: user.name });
+  });
+  socket.on(E_SHAPE, ({ name, shape }) => {
+    log(`[${name}]: sent shape`);
+    io.to(_CLASSROOM).emit(E_SHAPE, { name, shape });
+  });
+  socket.on(E_DATA, ({ name, data }) => {
+    log(`[${name}]: sent data`);
+    io.to(_CLASSROOM).emit(E_DATA, { name, data });
   });
   socket.on('disconnect', () => {
     const name = global.clients[socket.id];
     log(`[${name}]: ${socket.id} disconnected`);
     const user = global.users[name];
     if (user) {
+      user.online = false;
       user.sockets = user.sockets.filter((id) => id !== socket.id);
       delete global.clients[socket.id]
     }
   });
-  setInterval(() => {
-    io.to(_CLASSROOM).emit('event', { time: +new Date() })
-  }, 30e3)
 }
 
 function log(text) {
