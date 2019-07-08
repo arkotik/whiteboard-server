@@ -26,6 +26,7 @@ global.users = {
 };
 global.clients = {};
 
+const E_LOGOUT = 'logout';
 const E_AUTHORISE = 'authorise';
 const E_AUTHENTICATE = 'authenticate';
 const E_CHAT = 'chat';
@@ -43,12 +44,13 @@ function onConnectionHandler(socket) {
   global.clients[socket.id] = socket.id;
   socket.on(E_AUTHORISE, (data) => {
     const { name, pass } = data || {};
-    global.clients[socket.id] = name;
     const user = global.users[name];
     if (!user || user.pass !== pass) {
       socket.emit(E_AUTHORISE, { status: 'err', data: { message: 'Wrong name or password!' } });
       log(`[${name}]: authorisation failed`);
+      global.clients[socket.id] = socket.id;
     } else {
+      global.clients[socket.id] = name;
       log(`[${name}]: authorisation successfully`);
       user.sockets.push(socket.id);
       user.online = true;
@@ -67,7 +69,9 @@ function onConnectionHandler(socket) {
     if (!user || user.token !== token) {
       log(`[${name}]: authentication failed`);
       socket.emit(E_AUTHENTICATE, { status: 'err', data: { message: 'Wrong name or token!' } });
+      global.clients[socket.id] = socket.id;
     } else {
+      global.clients[socket.id] = name;
       log(`[${name}]: authentication successfully`);
       user.sockets.push(socket.id);
       user.online = true;
@@ -79,7 +83,13 @@ function onConnectionHandler(socket) {
       });
     }
   });
-
+  socket.on(E_LOGOUT, ({ name }) => {
+    const user = global.users[name];
+    user.online = false;
+    user.sockets = user.sockets.filter((id) => id !== socket.id);
+    io.to(_CLASSROOM).emit(E_STATUS, { online: user.online, name: user.name });
+    global.clients[socket.id] = socket.id;
+  });
   socket.on(E_COMMAND, ({ command, payload }) => {
     log(`command [${command}] sent`);
     io.to(_CLASSROOM).emit(E_COMMAND, { command, payload });
