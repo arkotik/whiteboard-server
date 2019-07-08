@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "pm2start": "pm2 start npm --name webrtc-signal -- run start",
+    "pm2start": "pm2 start npm --name classroom-server -- run start",
     "start": "node main.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
